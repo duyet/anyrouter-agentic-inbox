@@ -6,6 +6,12 @@
 	"observability": {
 		"enabled": true
 	},
+	"routes": [
+		{
+			"pattern": "mail.anyrouter.dev",
+			"custom_domain": true
+		}
+	],
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
