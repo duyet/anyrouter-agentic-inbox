@@ -24,7 +24,7 @@ export function getMailboxStub(
 	env: Env,
 	mailboxId: string,
 ): DurableObjectStub<MailboxDO> {
-	const ns = env.MAILBOX;
+	const ns = env.ANYROUTER_EMAIL_MAILBOX;
 	const id = ns.idFromName(mailboxId);
 	return ns.get(id);
 }

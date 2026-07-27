@@ -31,7 +31,7 @@ export const requireMailbox = createMiddleware<MailboxContext>(async (c, next) =
 	}
 
 	// Instantiate DO stub
-	const ns = c.env.MAILBOX;
+	const ns = c.env.ANYROUTER_EMAIL_MAILBOX;
 	const id = ns.idFromName(mailboxId);
 	const stub = ns.get(id);
 

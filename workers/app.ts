@@ -82,7 +82,7 @@ app.use("*", async (c, next) => {
 
 // MCP server endpoint — used by AI coding tools (ProtoAgent, Claude Code, Cursor, etc.)
 // Must be before API routes and React Router catch-all
-const mcpHandler = EmailMCP.serve("/mcp", { binding: "EMAIL_MCP" });
+const mcpHandler = EmailMCP.serve("/mcp", { binding: "ANYROUTER_EMAIL_MCP" });
 app.all("/mcp", async (c) => {
 	return mcpHandler.fetch(c.req.raw, c.env, c.executionCtx as ExecutionContext);
 });
@@ -99,6 +99,14 @@ app.all("/agents/*", async (c) => {
 	if (response) return response;
 	return c.text("Agent not found", 404);
 });
+
+// Serve static assets directly; Cloudflare Workers don't serve public/ in production.
+const faviconSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" fill="#1f1f1f"><path d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm320-280L160-640v400h640v-400L480-440Zm0-80 320-200H160l320 200ZM160-640v-80 480-400Z"/></svg>';
+app.all("/favicon.ico", (c) => c.redirect("/favicon.svg", 302));
+app.all("/favicon.svg", (c) =>
+	c.body(faviconSvg, 200, { "Content-Type": "image/svg+xml" }),
+);
+
 
 // React Router catch-all: serves the SPA for all non-API routes
 app.all("*", (c) => {

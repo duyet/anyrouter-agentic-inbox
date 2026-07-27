@@ -4,7 +4,18 @@
 	"compatibility_date": "2025-11-28",
 	"main": "./workers/app.ts",
 	"observability": {
-		"enabled": true
+		"enabled": true,
+		"logs": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"persist": true,
+			"invocation_logs": true
+		},
+		"traces": {
+			"enabled": true,
+			"persist": true,
+			"head_sampling_rate": 1
+		}
 	},
 	"routes": [
 		{
@@ -31,8 +42,8 @@
 	"r2_buckets": [
 		{
 			"binding": "BUCKET",
-			"bucket_name": "agentic-inbox",
-			"preview_bucket_name": "agentic-inbox"
+			"bucket_name": "anyrouter-email",
+			"preview_bucket_name": "anyrouter-email"
 		}
 	],
 	"ai": {
@@ -41,15 +52,15 @@
 	"durable_objects": {
 		"bindings": [
 			{
-				"name": "MAILBOX",
+				"name": "ANYROUTER_EMAIL_MAILBOX",
 				"class_name": "MailboxDO"
 			},
 			{
-				"name": "EMAIL_AGENT",
+				"name": "ANYROUTER_EMAIL_AGENT",
 				"class_name": "EmailAgent"
 			},
 			{
-				"name": "EMAIL_MCP",
+				"name": "ANYROUTER_EMAIL_MCP",
 				"class_name": "EmailMCP"
 			}
 		]
