@@ -15,7 +15,8 @@
 	"scripts": {
 		"build": "react-router build",
 		"cf-typegen": "wrangler types",
-		"deploy": "npm run build && wrangler deploy",
+		"deploy": "npm run build && npm run sync-secrets && wrangler deploy",
+		"sync-secrets": "if [ -f .env.local ]; then grep -v '^#' .env.local | grep -v '^$' | while IFS='=' read -r key value; do if [ -n \"$value\" ]; then printf '%s' \"$value\" | wrangler secret put \"$key\"; fi; done; fi",
 		"dev": "react-router dev",
 		"preview": "npm run build && vite preview",
 		"typecheck": "npm run cf-typegen && react-router typegen && tsc -b"
