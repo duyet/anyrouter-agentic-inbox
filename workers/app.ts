@@ -23,21 +23,12 @@ declare module "react-router" {
 	}
 }
 
+import { getAccessUrls, parsePolicyAuds } from "./lib/access";
+
 const requestHandler = createRequestHandler(
 	() => import("virtual:react-router/server-build"),
 	import.meta.env.MODE,
 );
-
-function getAccessUrls(teamDomain: string) {
-	const certsPath = "/cdn-cgi/access/certs";
-	const teamUrl = new URL(teamDomain);
-	const issuer = teamUrl.origin;
-	const certsUrl = teamUrl.pathname.endsWith(certsPath)
-		? teamUrl
-		: new URL(certsPath, issuer);
-
-	return { issuer, certsUrl };
-}
 
 // Main app that wraps the API and adds React Router fallback
 const app = new Hono<{ Bindings: Env }>();
@@ -64,13 +55,27 @@ app.use("*", async (c, next) => {
 		return c.text("Missing required CF Access JWT", 403);
 	}
 
+	// Resolve config OUTSIDE the verification try/catch. A malformed TEAM_DOMAIN
+	// or POLICY_AUD is an operator error (500), not a bad token (403) — conflating
+	// them is what made this fail silently and undiagnosably before.
+	let issuer: string;
+	let certsUrl: URL;
+	let audience: string[];
 	try {
-		const { issuer, certsUrl } = getAccessUrls(TEAM_DOMAIN);
+		({ issuer, certsUrl } = getAccessUrls(TEAM_DOMAIN));
+		audience = parsePolicyAuds(POLICY_AUD);
+		if (audience.length === 0) throw new Error("POLICY_AUD is empty");
+	} catch (err) {
+		console.error("[access] misconfigured", { TEAM_DOMAIN, err });
+		return c.text(
+			"Cloudflare Access is misconfigured: check POLICY_AUD and TEAM_DOMAIN.",
+			500,
+		);
+	}
+
+	try {
 		const JWKS = createRemoteJWKSet(certsUrl);
-		await jwtVerify(token, JWKS, {
-			issuer,
-			audience: POLICY_AUD,
-		});
+		await jwtVerify(token, JWKS, { issuer, audience });
 	} catch {
 		return c.text("Invalid or expired Access token", 403);
 	}

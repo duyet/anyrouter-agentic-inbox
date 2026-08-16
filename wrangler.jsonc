@@ -31,7 +31,7 @@
 		// TEAM_DOMAIN may be the base Access URL or the full /cdn-cgi/access/certs URL.
 		// The worker now fails closed outside local development if Access is not configured.
 		"DOMAINS": "anyrouter.dev",
-		"POLICY_AUD": "27a65459ca6085329760195a1f6cfb1c32852a13c7f498048c3ca1fd95293580",
+		"POLICY_AUD": "27a65459ca6085329760195a1f6cfb1c32852a13c7f498048c3ca1fd95293580,71c5bb558c309ed68557ac58cd970969ef541da856050cd3f0cd85a3ed066d0f",
 		"TEAM_DOMAIN": "anyr",
 		"EMAIL_ADDRESSES": []
 	},
