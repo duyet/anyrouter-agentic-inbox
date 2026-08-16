@@ -14,12 +14,16 @@ import {
 	generateMessageId,
 	buildThreadingHeaders,
 	listMailboxes,
+	stripHtmlToText,
 } from "./lib/email-helpers";
 import { SendEmailRequestSchema } from "./lib/schemas";
 import { handleReplyEmail, handleForwardEmail } from "./routes/reply-forward";
 import { Folders } from "../shared/folders";
 import type { Env } from "./types";
 import { requireMailbox, type MailboxContext } from "./lib/mailbox";
+import { inboxConfig } from "./config/inbox.config";
+import { matchRules } from "./lib/routing";
+import { runActions, type ActionEmail } from "./lib/actions";
 
 type AppContext = Context<MailboxContext>;
 
@@ -87,8 +91,15 @@ app.use("/api/v1/mailboxes/:mailboxId/*", requireMailbox);
 
 app.get("/api/v1/config", (c) => {
 	const domainsRaw = c.env.DOMAINS || "";
-	const domains = domainsRaw.split(",").map((d) => d.trim()).filter(Boolean);
-	const emailAddresses = c.env.EMAIL_ADDRESSES ?? [];
+	const envDomains = domainsRaw.split(",").map((d) => d.trim()).filter(Boolean);
+	const envAddresses = (c.env.EMAIL_ADDRESSES ?? []) as string[];
+	// `inboxConfig` (workers/config/inbox.config.ts) is the version-controlled
+	// source of truth; env vars are unioned in for back-compat with existing
+	// deploys that only set DOMAINS/EMAIL_ADDRESSES.
+	const domains = Array.from(new Set([...envDomains, ...inboxConfig.domains]));
+	const emailAddresses = Array.from(
+		new Set([...envAddresses, ...inboxConfig.mailboxes.map((m) => m.address)]),
+	);
 	return c.json({ domains, emailAddresses });
 });
 
@@ -102,7 +113,10 @@ app.get("/api/v1/mailboxes", async (c) => {
 app.post("/api/v1/mailboxes", async (c) => {
 	const { name, settings, email: rawEmail } = CreateMailboxBody.parse(await c.req.json());
 	const email = rawEmail.toLowerCase();
-	const allowedAddresses = (c.env.EMAIL_ADDRESSES ?? []) as string[];
+	const allowedAddresses = [
+		...((c.env.EMAIL_ADDRESSES ?? []) as string[]),
+		...inboxConfig.mailboxes.map((m) => m.address),
+	];
 	if (allowedAddresses.length > 0 && !allowedAddresses.map((a) => a.toLowerCase()).includes(email)) {
 		return c.json({ error: "Mailbox creation is restricted to configured EMAIL_ADDRESSES" }, 403);
 	}
@@ -351,7 +365,10 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number }, env
 
 	if (!parsedEmail.to?.length || !parsedEmail.to[0].address) throw new Error("received email with empty to");
 
-	const allowedAddresses = ((env.EMAIL_ADDRESSES ?? []) as string[]).map((a) => a.toLowerCase());
+	const allowedAddresses = [
+		...((env.EMAIL_ADDRESSES ?? []) as string[]),
+		...inboxConfig.mailboxes.map((m) => m.address),
+	].map((a) => a.toLowerCase());
 	const allRecipients = parsedEmail.to.map((t) => t.address?.toLowerCase()).filter(Boolean) as string[];
 	const ccRecipients = (parsedEmail.cc || []).map((e) => e.address?.toLowerCase()).filter(Boolean) as string[];
 	const bccRecipients = (parsedEmail.bcc || []).map((e) => e.address?.toLowerCase()).filter(Boolean) as string[];
@@ -407,6 +424,29 @@ async function receiveEmail(event: { raw: ReadableStream; rawSize: number }, env
 		method: "POST", headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ mailboxId, emailId: messageId, sender: (parsedEmail.from?.address || "").toLowerCase(), subject: parsedEmail.subject || "", threadId }),
 	})).catch((e) => console.error("Auto-draft trigger failed:", (e as Error).message)));
+
+	// Config-driven routing/actions (see workers/config/inbox.config.ts). Runs
+	// independently of the auto-draft trigger above — a routing/action
+	// failure must never affect email storage or the agent draft.
+	const matchedRules = matchRules(inboxConfig, {
+		to: mailboxId,
+		from: (parsedEmail.from?.address || "").toLowerCase(),
+		subject: parsedEmail.subject || "",
+	});
+	if (matchedRules.length > 0) {
+		const actionEmail: ActionEmail = {
+			messageId,
+			mailboxId,
+			sender: (parsedEmail.from?.address || "").toLowerCase(),
+			subject: parsedEmail.subject || "",
+			bodySnippet: stripHtmlToText(parsedEmail.html || parsedEmail.text || "").slice(0, 2000),
+		};
+		ctx.waitUntil(
+			Promise.all(matchedRules.map((rule) => runActions(env, rule, actionEmail))).catch((e) =>
+				console.error("Routing/action dispatch failed:", (e as Error).message),
+			),
+		);
+	}
 }
 
 export { app, receiveEmail };

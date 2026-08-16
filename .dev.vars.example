@@ -1,3 +1,8 @@
 # Cloudflare Access (required in production). TEAM_DOMAIN may be the base Access URL or the full /cdn-cgi/access/certs URL.
 POLICY_AUD=your-access-policy-audience-tag
 TEAM_DOMAIN=https://your-team.cloudflareaccess.com
+
+# Only needed locally if you're testing a `github_issue` rule from
+# workers/config/inbox.config.ts. In deployed environments this must be set
+# with `wrangler secret put GITHUB_TOKEN` — never in this file or committed.
+GITHUB_TOKEN=your-github-personal-access-token
